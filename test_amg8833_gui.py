@@ -146,8 +146,10 @@ def get_image_blobs(pb, nsd):
   blobs_str = run_on_board(pb, ['print(blob_list)'], no_print=True)
   blobs_str = blobs_str.replace("nan", "0")
   blobs = json.loads(blobs_str.replace('(', '[').replace(')', ']'))
+  '''
   temp_str = run_on_board(pb, ['print(blob.pMskSave1)'], no_print=False)
   temp_str = run_on_board(pb, ['print(blob.pMskSave2)'], no_print=False)
+  '''
   return img, blobs, t_ms
 
 # ---------------------------------------------------------------------
