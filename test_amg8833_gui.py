@@ -37,12 +37,6 @@ script_get_image = [
   'img_raw = list(amg.pixels_64x1)',
   'print(img_raw)'
 ]
-script_get_blob_list = [
-  'blob_list = blob.find_blobs_timed(img_raw, (8, 8))'
-]
-script_print_blob_list = [
-  'print(blob_list)'
-]
 
 # ---------------------------------------------------------------------
 class FrontEndGUI(object):
@@ -58,6 +52,7 @@ class FrontEndGUI(object):
     self._pb = pyb
     self._t_ms = 0
     self._info = "MPy"
+    self._nsd = 1.0
 
     # Define IR camera widget
     self.CameraIR = front.WidgetCamera(self.Win, (0 , 0), 0)
@@ -76,10 +71,14 @@ class FrontEndGUI(object):
         self._info = "MPy"
       elif event.key == 50: # "2"
         _ = run_on_board(pb, ["import blob_ulab as blob"])
-        self._info = "MPy +ulab"
+        self._info = "ulab"
       elif event.key == 51: # "3"
         _ = run_on_board(pb, ["import blob_ulab2 as blob"])
-        self._info = "ulab +C code"
+        self._info = "C code"
+      elif event.key == 273: # "key up"
+        self._nsd += 0.1
+      elif event.key == 274: # "key down"
+        self._nsd -= 0.1 if self._nsd > 0.2 else 0
 
   # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
   def run(self):
@@ -99,9 +98,10 @@ class FrontEndGUI(object):
     """ Update GUI
     """
     # Thermal camera image
-    data, blobs, t_ms = get_image_blobs(self._pb)
+    data, blobs, t_ms = get_image_blobs(self._pb, self._nsd)
     self._t_ms = (self._t_ms +t_ms) /2
-    s = "{0} blobs, {1:6.3f} ms/call ({2})".format(len(blobs), self._t_ms, self._info)
+    s = "{0} blobs, {1:6.3f} ms/call ({2}), nsd={3:.1f}".format(len(blobs),
+        self._t_ms, self._info, self._nsd)
     self.CameraIR.setLabels("AMG8833 8x8 thermal camera", s)
     self.CameraIR.update(data, (8,8), blobs)
 
@@ -133,18 +133,21 @@ def run_on_board(pb, code, wait_s=0, no_print=False):
     time.sleep(wait_s)
   return res
 
-def get_image_blobs(pb):
+def get_image_blobs(pb, nsd):
   """ Get an image from the sensor connected to the MicroPython board,
       find blobs and return the image, a list of blobs, and the time it
       took to find the blobs (in [ms])
   """
   raw = json.loads(run_on_board(pb, script_get_image, no_print=True))
   img = np.flip(np.transpose(np.reshape(raw, (8, 8))))
-  time_str = run_on_board(pb, script_get_blob_list, no_print=True)
+  s = 'blob_list = blob.find_blobs_timed(img_raw, (8, 8), {0})'.format(nsd)
+  time_str = run_on_board(pb, [s], no_print=True)
   t_ms = float(time_str.split("= ")[1].split("m")[0])
-  blobs_str = run_on_board(pb, script_print_blob_list, no_print=True)
+  blobs_str = run_on_board(pb, ['print(blob_list)'], no_print=True)
   blobs_str = blobs_str.replace("nan", "0")
   blobs = json.loads(blobs_str.replace('(', '[').replace(')', ']'))
+  temp_str = run_on_board(pb, ['print(blob.pMskSave1)'], no_print=False)
+  temp_str = run_on_board(pb, ['print(blob.pMskSave2)'], no_print=False)
   return img, blobs, t_ms
 
 # ---------------------------------------------------------------------

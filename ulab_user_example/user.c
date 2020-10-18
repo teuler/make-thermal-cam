@@ -22,9 +22,27 @@
 //| """This module should hold arbitrary user-defined functions."""
 //|
 
-static mp_obj_t user_dummy(mp_obj_t arg) {
-    mp_float_t value = mp_obj_get_float(arg);
-    return mp_obj_new_float(2*value);
+static mp_obj_t user_dummy(mp_obj_t arg_obj) {
+    if(!mp_obj_is_type(arg_obj, &ulab_ndarray_type)) {
+        mp_raise_TypeError(translate("`dummy` requires an ndarray"));
+    }
+    ndarray_obj_t *arg_arr = MP_OBJ_TO_PTR(arg_obj);
+    mp_float_t *arg_items = (mp_float_t *)arg_arr->array->items;
+    mp_float_t sum, mean, sd;
+    sum = 0;
+    for(size_t i=0; i<arg_arr->array->len; i++) {
+	        sum += arg_items[i];
+    }
+    mean = (mp_float_t)sum /arg_arr->array->len;
+    sum = 0;
+    for(size_t i=0; i<arg_arr->array->len; i++) {
+        sum += (mp_float_t)pow(arg_items[i] -mean, 2);
+    }
+    sd = (mp_float_t)sqrt(sum /arg_arr->array->len);
+    mp_obj_t tempL = mp_obj_new_list(0, NULL);
+    mp_obj_list_append(tempL, mp_obj_new_float(mean));
+    mp_obj_list_append(tempL, mp_obj_new_float(sd));
+    return tempL;
 }
 
 MP_DEFINE_CONST_FUN_OBJ_1(user_dummy_obj, user_dummy);

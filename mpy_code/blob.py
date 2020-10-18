@@ -40,6 +40,13 @@ class blob_struct(object):
     self.x = b.x
     self.y = b.y
 
+# ******
+# ******
+pMskSave1 = array.array("B", [0]*64)
+pMskSave2 = array.array("B", [0]*64)
+# ******
+# ******
+
 # ----------------------------------------------------------------------------
 def timed_function(f, *args, **kwargs):
   """ Use as decorator to measure the duration of a function call
@@ -97,7 +104,7 @@ def find_blobs(img, dxy, nsd=1.0):
   # Find blob(s) ...
   #
   # Mark all pixels above the threshold
-  pMsk = array.array("B", [0]*n)
+  pMsk = array.array("B", [254]*n)
   pPrb = array.array("f", [0]*n)
   nThres = 0
   for i in range(n):
@@ -105,6 +112,13 @@ def find_blobs(img, dxy, nsd=1.0):
       pMsk[i] = 255
       pPrb[i] = (pImg[i] -avg) /sd
       nThres += 1
+
+  # ******
+  # ******
+  global pMskSave1, pMskSave2
+  pMskSave1 = array.array("B", pMsk)
+  # ******
+  # ******
 
   # Check if these above-threshold pixels represent continuous blobs
   nLeft = nThres
@@ -155,6 +169,12 @@ def find_blobs(img, dxy, nsd=1.0):
           blobs[k].prob = bp /nFound
           iBlob += 1
   nBlobs = iBlob
+
+  # ******
+  # ******
+  pMskSave2 = array.array("B", pMsk)
+  # ******
+  # ******
 
   # Copy blobs into list as function result
   tempL = []
