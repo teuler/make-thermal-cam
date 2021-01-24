@@ -1,4 +1,3 @@
-
 /*
  * This file is part of the micropython-ulab project,
  *
@@ -18,7 +17,7 @@
 #include "user.h"
 #include "stack.h"
 
-#if ULAB_USER_MODULE
+#if ULAB_HAS_USER_MODULE
 
 //| """This module should hold arbitrary user-defined functions."""
 //|
@@ -58,25 +57,32 @@ static mp_obj_t user_spatial_filter(mp_obj_t img_obj, mp_obj_t kernel_obj,
      mp_raise_TypeError(translate("`spatial_filter` requires ndarray"));
   }
   mp_float_t avg, sum;
-  int padd, j, dxf, dyf, nf, x, y, ix, iy, x2, y2, dk;
+  uint16_t padd, j, dxf, dyf, nf, x, y, ix, iy, x2, y2, dk;
+  size_t *shape = m_new(size_t, ULAB_MAX_DIMS);
 
   // Extract the parameters from the micropython input objects
   ndarray_obj_t *img_arr = MP_OBJ_TO_PTR(img_obj);
-  mp_float_t *img_items = (mp_float_t *)img_arr->array->items;
   ndarray_obj_t *knl_arr = MP_OBJ_TO_PTR(kernel_obj);
-  if((knl_arr->m != knl_arr->n) || (knl_arr->m % 2 == 0) || (knl_arr->m <= 1)) {
+  if(!ndarray_is_dense(img_arr) || !ndarray_is_dense(knl_arr)) {
+      mp_raise_TypeError(translate("input must be a dense ndarray"));
+  }
+  uint16_t knl_m = knl_arr->shape[ULAB_MAX_DIMS -2];
+  uint16_t knl_n = knl_arr->shape[ULAB_MAX_DIMS -1];
+  if((knl_arr->ndim != 2) || (knl_n != knl_m) || (knl_m % 2 == 0)) {
     mp_raise_TypeError(translate("`kernel` must be square matrix"));
   }
-  mp_float_t *knl_items = (mp_float_t *)knl_arr->array->items;
+  mp_float_t *img_items = (mp_float_t *)img_arr->array;
+  mp_float_t *knl_items = (mp_float_t *)knl_arr->array;
+
   mp_obj_t *temp;
   mp_obj_get_array_fixed_n(dxy_obj, 2, &temp);
-  int dx = mp_obj_get_int(temp[0]);
-  int dy = mp_obj_get_int(temp[1]);
+  uint16_t dx = mp_obj_get_int(temp[0]);
+  uint16_t dy = mp_obj_get_int(temp[1]);
   int n = dx*dy;
-  int img_m = img_arr->m;
-  int img_n = img_arr->n;
+  uint16_t img_m = img_arr->shape[ULAB_MAX_DIMS -2];
+  uint16_t img_n = img_arr->shape[ULAB_MAX_DIMS -1];
   if(img_m *img_n != n) {
-    mp_raise_TypeError(translate("`img` size is inconsistent with shape in `dxy`"));
+    mp_raise_TypeError(translate("`img` size != shape in `dxy`"));
   }
 
   // Calculate average for edge pixels
@@ -87,13 +93,15 @@ static mp_obj_t user_spatial_filter(mp_obj_t img_obj, mp_obj_t kernel_obj,
   avg = sum /n;
 
   // Make a padded image copy for the filtering
-  dk = knl_arr->m;
+  dk = knl_m;
   padd = (int)trunc(dk /2);
   dxf = dx +padd*2;
   dyf = dy +padd*2;
   nf = dxf*dyf;
-  ndarray_obj_t *imgp_arr = create_new_ndarray(dxf, dyf, NDARRAY_FLOAT);
-  mp_float_t *imgp_items = (mp_float_t *)imgp_arr->array->items;
+  shape[ULAB_MAX_DIMS -1] = dxf;
+  shape[ULAB_MAX_DIMS -2] = dyf;
+  ndarray_obj_t *imgp_arr = ndarray_new_dense_ndarray(2, shape, NDARRAY_FLOAT);
+  mp_float_t *imgp_items = (mp_float_t *)imgp_arr->array;
 
   // ... fill the borders with the mean and the centre with the image
   for(j=0; j<nf; j++)
@@ -103,9 +111,12 @@ static mp_obj_t user_spatial_filter(mp_obj_t img_obj, mp_obj_t kernel_obj,
       imgp_items[x+padd +(y+padd)*dxf] = img_items[x +y*dx];
     }
   }
+
   // Make image for filtered result
-  ndarray_obj_t *imgf_arr = create_new_ndarray(img_m, img_n, NDARRAY_FLOAT);
-  mp_float_t *imgf_items = (mp_float_t *)imgf_arr->array->items;
+  shape[ULAB_MAX_DIMS -1] = img_n;
+  shape[ULAB_MAX_DIMS -2] = img_m;
+  ndarray_obj_t *imgf_arr = ndarray_new_dense_ndarray(2, shape, NDARRAY_FLOAT);
+  mp_float_t *imgf_items = (mp_float_t *)imgf_arr->array;
 
   // Apply filter ...
   for(x=0; x<dx; x++) {
@@ -150,7 +161,7 @@ static mp_obj_t user_blobs(mp_obj_t img_obj, mp_obj_t dxy_obj,
 
     // Extract the parameters from the micropython input objects
     ndarray_obj_t *img_arr = MP_OBJ_TO_PTR(img_obj);
-    mp_float_t *img_items = (mp_float_t *)img_arr->array->items;
+    mp_float_t *img_items = (mp_float_t *)img_arr->array;
     mp_obj_get_array_fixed_n(dxy_obj, 2, &temp);
     dx = mp_obj_get_int(temp[0]);
     dy = mp_obj_get_int(temp[1]);
@@ -158,10 +169,10 @@ static mp_obj_t user_blobs(mp_obj_t img_obj, mp_obj_t dxy_obj,
     n = dx*dy;
 
     // Create other arrays and zero them
-    ndarray_obj_t *prb_arr = create_new_ndarray(1, n, NDARRAY_FLOAT);
-    mp_float_t *prb_items = (mp_float_t *)prb_arr->array->items;
-    ndarray_obj_t *msk_arr = create_new_ndarray(1, n, NDARRAY_UINT8);
-    uint8_t *msk_items = (uint8_t *)msk_arr->array->items;
+    ndarray_obj_t *prb_arr = ndarray_new_linear_array(n, NDARRAY_FLOAT);
+    mp_float_t *prb_items = (mp_float_t *)prb_arr->array;
+    ndarray_obj_t *msk_arr = ndarray_new_linear_array(n, NDARRAY_UINT8);
+    uint8_t *msk_items = (uint8_t *)msk_arr->array;
     for(size_t i=0; i<n; i++) {
         prb_items[i] = 0;
         msk_items[i] = 0;
@@ -285,13 +296,13 @@ static mp_obj_t user_blobs(mp_obj_t img_obj, mp_obj_t dxy_obj,
 MP_DEFINE_CONST_FUN_OBJ_3(user_blobs_obj, user_blobs);
 MP_DEFINE_CONST_FUN_OBJ_3(user_spatial_filter_obj, user_spatial_filter);
 
-STATIC const mp_rom_map_elem_t ulab_user_globals_table[] = {
+static const mp_rom_map_elem_t ulab_user_globals_table[] = {
     { MP_OBJ_NEW_QSTR(MP_QSTR___name__), MP_OBJ_NEW_QSTR(MP_QSTR_user) },
 	  { MP_OBJ_NEW_QSTR(MP_QSTR_blobs), (mp_obj_t)&user_blobs_obj },
     { MP_OBJ_NEW_QSTR(MP_QSTR_spatial_filter), (mp_obj_t)&user_spatial_filter_obj },
 };
 
-STATIC MP_DEFINE_CONST_DICT(mp_module_ulab_user_globals,
+static MP_DEFINE_CONST_DICT(mp_module_ulab_user_globals,
                             ulab_user_globals_table);
 
 mp_obj_module_t ulab_user_module = {

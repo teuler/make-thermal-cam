@@ -11,7 +11,7 @@
 # ---------------------------------------------------------------------
 import math
 import ulab as np
-from ulab import numerical
+from ulab import numpy as np
 from ulab import user
 from micropython import const
 from time import ticks_us, ticks_diff

@@ -11,7 +11,7 @@
 # ---------------------------------------------------------------------
 import math
 import ulab as np
-from ulab import numerical
+from ulab import numpy as np
 from micropython import const
 from time import ticks_us, ticks_diff
 
@@ -71,14 +71,14 @@ def spatial_filter(img, kernel, dxy=None):
   # Make a padded copy of the image; pad with mean of image to reduce edge
   # effects
   padd = dk // 2
-  img2dp = np.ones((dx +padd*2, dy +padd*2)) *numerical.mean(img2d)
+  img2dp = np.ones((dx +padd*2, dy +padd*2)) *np.mean(img2d)
   img2dp[padd:dx+padd,padd:dy+padd] = img2d
   imgRes = np.zeros(img2dp.shape())
 
   # Convolve padded image with kernel
   for x in range(0, dx):
     for y in range(0, dy):
-      imgRes[x+padd,y+padd] = numerical.sum(img2dp[x:x+dk,y:y+dk] *krn[:,:])
+      imgRes[x+padd,y+padd] = np.sum(img2dp[x:x+dk,y:y+dk] *krn[:,:])
 
   # Remove padding, flatten and restore value type if needed
   _img = imgRes[padd:dx+padd,padd:dy+padd]
@@ -127,25 +127,25 @@ def find_blobs(img, dxy, nsd=1.0):
   pImg = np.array(img)
 
   # Calculate mean and sd across (filtered) image to determine threshold
-  avg = numerical.mean(pImg)
-  sd = numerical.std(pImg)
+  avg = np.mean(pImg)
+  sd = np.std(pImg)
   thres = avg +sd *nsd
 
   # Find blob(s) ...
   #
   # Mark all pixels above a threshold
   pPrb = (pImg -avg) /sd
-  pMsk = np.array(pImg >= thres, dtype=np.uint8) *255
-  nThres = int(numerical.sum(pMsk) /255)
+  pMsk = (pImg >= thres) *255
+  nThres = int(np.sum(pMsk) /255)
 
   # Check if these above-threshold pixels represent continuous blobs
   nLeft = nThres
   iBlob = 0
   while nLeft > 0 and iBlob < MAX_BLOBS:
     # As long as unassigned mask pixels are left, find the next one using
-    # `ulab.numerical.argmax()`, which returns the index of the (first)
+    # `np.argmax()`, which returns the index of the (first)
     # hightest value, which should be 255
-    iPix = numerical.argmax(pMsk)
+    iPix = np.argmax(pMsk)
     x = iPix % dx
     y = iPix //dx
 
